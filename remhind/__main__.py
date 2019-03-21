@@ -14,15 +14,7 @@ gi.require_version('Notify', '0.7')
 from gi.repository import Notify  # noqa
 
 
-async def main():
-    parser = argparse.ArgumentParser(description="remind event from vdirs")
-    parser.add_argument('-c', '--config', type=pathlib.Path,
-        default=XDG_CONFIG_HOME / 'remhind' / 'config')
-    parser.add_argument('-d', '--database', type=pathlib.Path,
-        default=XDG_CACHE_HOME / 'remhind.db')
-    parser.add_argument('-v', '--verbose', action='count', default=0)
-    args = parser.parse_args()
-
+async def monitor_file_events(args):
     with args.config.open() as fd:
         config = toml.load(fd)
 
@@ -38,5 +30,16 @@ async def main():
     await asyncio.gather(events_checker, calendars_monitor)
 
 
+def main():
+    parser = argparse.ArgumentParser(description="remind event from vdirs")
+    parser.add_argument('-c', '--config', type=pathlib.Path,
+        default=XDG_CONFIG_HOME / 'remhind' / 'config')
+    parser.add_argument('-d', '--database', type=pathlib.Path,
+        default=XDG_CACHE_HOME / 'remhind.db')
+    parser.add_argument('-v', '--verbose', action='count', default=0)
+
+    asyncio.run(monitor_file_events(parser.parse_args()))
+
+
 if __name__ == '__main__':
-    asyncio.run(main())
+    main()

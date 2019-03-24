@@ -1,5 +1,6 @@
 import datetime as dt
 import unittest
+from unittest.mock import Mock, patch
 
 import icalendar
 import pytz
@@ -52,6 +53,22 @@ DTSTAMP:20190310T150000Z
 DTSTART:20190310
 SUMMARY:Breakfast Meeting
 CLASS:PRIVATE
+BEGIN:VALARM
+TRIGGER:-PT30M
+ACTION:DISPLAY
+DESCRIPTION:Breakfast Meeting Reminder
+END:VALARM
+END:VEVENT
+"""
+
+VEVENT_RRULE = """
+BEGIN:VEVENT
+UID:20190310
+DTSTAMP:20190310T150000Z
+DTSTART:20190310T150000Z
+SUMMARY:RRULE VEVENT
+CLASS:PRIVATE
+RRULE:FREQ=DAILY
 BEGIN:VALARM
 TRIGGER:-PT30M
 ACTION:DISPLAY
@@ -306,3 +323,35 @@ class TestEventCollection(unittest.TestCase):
         self.assertEqual(
             alarms[0].due_date.astimezone(pytz.UTC),
             dt.datetime(2019, 3, 10, 11, 0, tzinfo=pytz.UTC))
+
+    @patch('pathlib.Path.read_text')
+    def test_due_alarms(self, path_mock):
+        path_mock.return_value = VEVENT_ALARM
+        event = icalendar.Event.from_ical(VEVENT_ALARM)
+        collection = EventCollection()
+        collection.add(event, None)
+
+        start = dt.datetime(2019, 3, 10, 12, 0, tzinfo=pytz.UTC)
+        alarms = collection.get_due_alarms(start)
+        self.assertEqual(len(alarms), 0)
+
+        start = dt.datetime(2019, 3, 10, 14, 30, tzinfo=pytz.UTC)
+        alarms = collection.get_due_alarms(start)
+        self.assertEqual(len(alarms), 1)
+
+        start = dt.datetime(2019, 3, 10, 15, 0, tzinfo=pytz.UTC)
+        alarms = collection.get_due_alarms(start)
+        self.assertEqual(len(alarms), 1)
+
+    @patch('pathlib.Path.read_text')
+    def test_due_alarms_reccuring(self, path_mock):
+        path_mock.return_value = VEVENT_RRULE
+        event = icalendar.Event.from_ical(VEVENT_RRULE)
+        collection = EventCollection()
+        collection.add(event, None)
+
+        for day in range(15, 31):
+            start = dt.datetime(2019, 3, day, 15, 0, tzinfo=pytz.UTC)
+            with self.subTest(start):
+                alarms = collection.get_due_alarms(start)
+                self.assertEqual(len(alarms), 1)

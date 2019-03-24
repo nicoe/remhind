@@ -1,6 +1,6 @@
 import datetime as dt
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import icalendar
 import pytz

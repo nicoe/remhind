@@ -9,7 +9,7 @@ from dataclasses import dataclass, InitVar
 import gi
 import icalendar
 import pytz
-from dateutil.rrule import rruleset, rrulestr
+from dateutil.rrule import rruleset, rrulestr, rrule, DAILY
 from tzlocal import get_localzone
 
 gi.require_version('Notify', '0.7')
@@ -271,14 +271,25 @@ class EventCollection:
             if summary:
                 self.db.add_alarm(cal_obj['uid'], dt, dt, summary)
 
-        has_rules = ('rrule' in cal_obj or 'exrule' in cal_obj
+        ics_has_rule = ('rrule' in cal_obj or 'exrule' in cal_obj
             or 'rdate' in cal_obj or 'exdate' in cal_obj)
+        has_rules = ics_has_rule or isinstance(cal_obj, icalendar.Todo)
         if not has_rules:
             if start_dt:
                 _add_occurence(start_dt)
                 self.db.add_last_occurence(cal_obj['uid'], start_dt)
-        else:
+        elif ics_has_rule:
             rules = parse_rule(cal_obj)
+            for occurence in rules.xafter(latest_occurence, 10, inc=True):
+                _add_occurence(occurence)
+            self.db.add_last_occurence(cal_obj['uid'], occurence)
+            latest_occurence = occurence
+        else:
+            if 'dtstart' in cal_obj:
+                dtstart = _date2datetime(cal_obj['dtstart'].dt)
+            elif 'due' in cal_obj:
+                dtstart = _date2datetime(cal_obj['due'].dt)
+            rules = rrule(DAILY, dtstart=dtstart)
             for occurence in rules.xafter(latest_occurence, 10, inc=True):
                 _add_occurence(occurence)
             self.db.add_last_occurence(cal_obj['uid'], occurence)
@@ -291,7 +302,17 @@ class EventCollection:
 
     def get_due_alarms(self, date):
         end_date = date + dt.timedelta(minutes=1)
-        alarms = self.db.get_alarms(date, end_date)
+        db_alarms = self.db.get_alarms(date, end_date)
+        alarms2ics = self.db.get_ics_files({a.event for a in db_alarms})
+
+        alarms = []
+        for alarm in db_alarms:
+            ical = get_component_from_ics(alarm.event, alarms2ics[alarm.event])
+            if (isinstance(ical, icalendar.Todo)
+                    and ical.get('status', 'NEEDS-ACTION') not in {
+                        'NEEDS-ACTION', 'IN-PROCESS'}):
+                continue
+            alarms.append(alarm)
 
         max_alarms = {}
         for alarm in alarms:
@@ -302,8 +323,9 @@ class EventCollection:
                 max_alarms[alarm.event] = alarm.due_date
         to_renew = {event for event, date in max_alarms.items()
             if date >= self._last_occurences.get(event, MIN_DT)}
-        ics_files = self.db.get_ics_files(to_renew)
-        for event_uid, ics in ics_files.items():
+        for event_uid, ics in alarms2ics.items():
+            if event_uid not in to_renew:
+                continue
             event = get_component_from_ics(
                 event_uid, pathlib.Path(ics).read_text())
             self.add(event, ics, max_alarms[event_uid])

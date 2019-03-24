@@ -1,4 +1,4 @@
-import datetime
+import datetime as dt
 import unittest
 
 import icalendar
@@ -149,7 +149,7 @@ class TestEventFunction(unittest.TestCase):
         self.assertEqual(component['uid'], '20190310')
         self.assertEqual(
             component['dtstart'].dt,
-            datetime.datetime(2019, 3, 10, 15, 0, tzinfo=pytz.UTC))
+            dt.datetime(2019, 3, 10, 15, 0, tzinfo=pytz.UTC))
 
         component = get_component_from_ics('20190310', RRULE_TODO)
         self.assertIsNone(component)
@@ -162,39 +162,39 @@ class TestEventCollection(unittest.TestCase):
         collection = EventCollection()
         collection.add(event, None)
 
-        start = datetime.datetime(2019, 3, 10, 0, 0)
-        end = datetime.datetime(2019, 3, 11, 0, 0)
+        start = dt.datetime(2019, 3, 10, 0, 0)
+        end = dt.datetime(2019, 3, 11, 0, 0)
         alarms = collection.db.get_alarms(start, end)
         self.assertEqual(len(alarms), 1)
         self.assertEqual(alarms[0].event, '20190310')
         self.assertEqual(alarms[0].message, 'Annual Employee Review')
         self.assertEqual(
             alarms[0].due_date.astimezone(pytz.UTC),
-            datetime.datetime(2019, 3, 10, 15, 0, tzinfo=pytz.UTC))
+            dt.datetime(2019, 3, 10, 15, 0, tzinfo=pytz.UTC))
 
     def test_alarm_vevent(self):
         event = icalendar.Event.from_ical(VEVENT_ALARM)
         collection = EventCollection()
         collection.add(event, None)
 
-        start = datetime.datetime(2019, 3, 10, 0, 0)
-        end = datetime.datetime(2019, 3, 11, 0, 0)
+        start = dt.datetime(2019, 3, 10, 0, 0)
+        end = dt.datetime(2019, 3, 11, 0, 0)
         alarms = collection.db.get_alarms(start, end)
 
         self.assertEqual(len(alarms), 2)
         self.assertEqual(
             alarms[0].due_date.astimezone(pytz.UTC),
-            datetime.datetime(2019, 3, 10, 15, 0, tzinfo=pytz.UTC))
+            dt.datetime(2019, 3, 10, 15, 0, tzinfo=pytz.UTC))
         self.assertEqual(
             alarms[0].date.astimezone(pytz.UTC),
-            datetime.datetime(2019, 3, 10, 14, 30, tzinfo=pytz.UTC))
+            dt.datetime(2019, 3, 10, 14, 30, tzinfo=pytz.UTC))
         self.assertEqual(alarms[0].message, "Breakfast Meeting Reminder")
         self.assertEqual(
             alarms[1].due_date.astimezone(pytz.UTC),
-            datetime.datetime(2019, 3, 10, 15, 0, tzinfo=pytz.UTC))
+            dt.datetime(2019, 3, 10, 15, 0, tzinfo=pytz.UTC))
         self.assertEqual(
             alarms[1].date.astimezone(pytz.UTC),
-            datetime.datetime(2019, 3, 10, 15, 0, tzinfo=pytz.UTC))
+            dt.datetime(2019, 3, 10, 15, 0, tzinfo=pytz.UTC))
         self.assertEqual(alarms[1].message, "Breakfast Meeting")
 
     def test_date_vevent(self):
@@ -202,14 +202,14 @@ class TestEventCollection(unittest.TestCase):
         collection = EventCollection()
         collection.add(event, None)
 
-        start = datetime.datetime(2019, 3, 10, 0, 0)
-        end = datetime.datetime(2019, 3, 11, 0, 0)
+        start = dt.datetime(2019, 3, 10, 0, 0)
+        end = dt.datetime(2019, 3, 11, 0, 0)
         alarms = collection.db.get_alarms(start, end)
 
         self.assertEqual(len(alarms), 1)
         self.assertEqual(
             alarms[0].due_date.astimezone(pytz.UTC),
-            datetime.datetime(2019, 3, 10, 11, 0, tzinfo=pytz.UTC))
+            dt.datetime(2019, 3, 10, 11, 0, tzinfo=pytz.UTC))
         self.assertEqual(alarms[0].message, "Birthday")
 
     def test_date_alarm_vevent(self):
@@ -217,24 +217,24 @@ class TestEventCollection(unittest.TestCase):
         collection = EventCollection()
         collection.add(event, None)
 
-        start = datetime.datetime(2019, 3, 10, 0, 0)
-        end = datetime.datetime(2019, 3, 11, 0, 0)
+        start = dt.datetime(2019, 3, 10, 0, 0)
+        end = dt.datetime(2019, 3, 11, 0, 0)
         alarms = collection.db.get_alarms(start, end)
 
         self.assertEqual(len(alarms), 2)
         self.assertEqual(
             alarms[0].due_date.astimezone(pytz.UTC),
-            datetime.datetime(2019, 3, 10, 11, 0, tzinfo=pytz.UTC))
+            dt.datetime(2019, 3, 10, 11, 0, tzinfo=pytz.UTC))
         self.assertEqual(
             alarms[0].date.astimezone(pytz.UTC),
-            datetime.datetime(2019, 3, 10, 10, 30, tzinfo=pytz.UTC))
+            dt.datetime(2019, 3, 10, 10, 30, tzinfo=pytz.UTC))
         self.assertEqual(alarms[0].message, "Breakfast Meeting Reminder")
         self.assertEqual(
             alarms[1].due_date.astimezone(pytz.UTC),
-            datetime.datetime(2019, 3, 10, 11, 0, tzinfo=pytz.UTC))
+            dt.datetime(2019, 3, 10, 11, 0, tzinfo=pytz.UTC))
         self.assertEqual(
             alarms[1].date.astimezone(pytz.UTC),
-            datetime.datetime(2019, 3, 10, 11, 0, tzinfo=pytz.UTC))
+            dt.datetime(2019, 3, 10, 11, 0, tzinfo=pytz.UTC))
         self.assertEqual(alarms[1].message, "Breakfast Meeting")
 
     def test_rrule_event(self):
@@ -242,52 +242,52 @@ class TestEventCollection(unittest.TestCase):
         collection = EventCollection()
         collection.add(event, None)
 
-        start = datetime.datetime(2019, 2, 7, 0, 0)
-        end = datetime.datetime(2019, 2, 10, 0, 0)
+        start = dt.datetime(2019, 2, 7, 0, 0)
+        end = dt.datetime(2019, 2, 10, 0, 0)
         alarms = collection.db.get_alarms(start, end)
 
         self.assertEqual(len(alarms), 4)
         self.assertEqual(
             alarms[0].due_date.astimezone(pytz.UTC),
-            datetime.datetime(2019, 2, 7, 9, 0, tzinfo=pytz.UTC))
+            dt.datetime(2019, 2, 7, 9, 0, tzinfo=pytz.UTC))
         self.assertEqual(
             alarms[0].date.astimezone(pytz.UTC),
-            datetime.datetime(2019, 2, 7, 8, 0, tzinfo=pytz.UTC))
+            dt.datetime(2019, 2, 7, 8, 0, tzinfo=pytz.UTC))
         self.assertEqual(
             alarms[1].due_date.astimezone(pytz.UTC),
-            datetime.datetime(2019, 2, 7, 9, 0, tzinfo=pytz.UTC))
+            dt.datetime(2019, 2, 7, 9, 0, tzinfo=pytz.UTC))
         self.assertEqual(
             alarms[1].date.astimezone(pytz.UTC),
-            datetime.datetime(2019, 2, 7, 9, 0, tzinfo=pytz.UTC))
+            dt.datetime(2019, 2, 7, 9, 0, tzinfo=pytz.UTC))
         self.assertEqual(
             alarms[2].due_date.astimezone(pytz.UTC),
-            datetime.datetime(2019, 2, 8, 9, 0, tzinfo=pytz.UTC))
+            dt.datetime(2019, 2, 8, 9, 0, tzinfo=pytz.UTC))
         self.assertEqual(
             alarms[2].date.astimezone(pytz.UTC),
-            datetime.datetime(2019, 2, 8, 8, 0, tzinfo=pytz.UTC))
+            dt.datetime(2019, 2, 8, 8, 0, tzinfo=pytz.UTC))
         self.assertEqual(
             alarms[3].due_date.astimezone(pytz.UTC),
-            datetime.datetime(2019, 2, 8, 9, 0, tzinfo=pytz.UTC))
+            dt.datetime(2019, 2, 8, 9, 0, tzinfo=pytz.UTC))
         self.assertEqual(
             alarms[3].date.astimezone(pytz.UTC),
-            datetime.datetime(2019, 2, 8, 9, 0, tzinfo=pytz.UTC))
+            dt.datetime(2019, 2, 8, 9, 0, tzinfo=pytz.UTC))
 
     def test_vtodo(self):
         event = icalendar.Event.from_ical(VTODO)
         collection = EventCollection()
         collection.add(event, None)
 
-        start = datetime.datetime(2019, 3, 10, 0, 0)
-        end = datetime.datetime(2019, 3, 11, 0, 0)
+        start = dt.datetime(2019, 3, 10, 0, 0)
+        end = dt.datetime(2019, 3, 11, 0, 0)
         alarms = collection.db.get_alarms(start, end)
 
         self.assertEqual(len(alarms), 1)
         self.assertEqual(
             alarms[0].date.astimezone(pytz.UTC),
-            datetime.datetime(2019, 3, 10, 17, 0, tzinfo=pytz.UTC))
+            dt.datetime(2019, 3, 10, 17, 0, tzinfo=pytz.UTC))
         self.assertEqual(
             alarms[0].date.astimezone(pytz.UTC),
-            datetime.datetime(2019, 3, 10, 17, 0, tzinfo=pytz.UTC))
+            dt.datetime(2019, 3, 10, 17, 0, tzinfo=pytz.UTC))
         self.assertEqual(alarms[0].message, "Income Tax Preparation")
 
     def test_date_vtodo(self):
@@ -295,14 +295,14 @@ class TestEventCollection(unittest.TestCase):
         collection = EventCollection()
         collection.add(event, None)
 
-        start = datetime.datetime(2019, 3, 10, 0, 0)
-        end = datetime.datetime(2019, 3, 11, 0, 0)
+        start = dt.datetime(2019, 3, 10, 0, 0)
+        end = dt.datetime(2019, 3, 11, 0, 0)
         alarms = collection.db.get_alarms(start, end)
 
         self.assertEqual(len(alarms), 1)
         self.assertEqual(
             alarms[0].date.astimezone(pytz.UTC),
-            datetime.datetime(2019, 3, 10, 11, 0, tzinfo=pytz.UTC))
+            dt.datetime(2019, 3, 10, 11, 0, tzinfo=pytz.UTC))
         self.assertEqual(
             alarms[0].due_date.astimezone(pytz.UTC),
-            datetime.datetime(2019, 3, 10, 11, 0, tzinfo=pytz.UTC))
+            dt.datetime(2019, 3, 10, 11, 0, tzinfo=pytz.UTC))

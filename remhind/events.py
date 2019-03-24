@@ -1,6 +1,6 @@
 import asyncio
 import calendar
-import datetime
+import datetime as dt
 import logging
 import pathlib
 import sqlite3
@@ -17,15 +17,15 @@ from gi.repository import Notify  # noqa
 
 LOCAL_TZ = get_localzone()
 MIN_SEQ = -999
-MIN_DT = datetime.datetime(1900, 1, 1, tzinfo=LOCAL_TZ)
+MIN_DT = dt.datetime(1900, 1, 1, tzinfo=LOCAL_TZ)
 
 
 def _date2datetime(date):
-    if (isinstance(date, datetime.date)
-            and not isinstance(date, datetime.datetime)):
+    if (isinstance(date, dt.date)
+            and not isinstance(date, dt.datetime)):
         # It should be 00:00 UTC per the RFC
         date = LOCAL_TZ.localize(
-            datetime.datetime.combine(date, datetime.time(12, 0)))
+            dt.datetime.combine(date, dt.time(12, 0)))
     return date
 
 
@@ -38,7 +38,7 @@ def _to_utc_timestamp(dt):
 def _from_utc_timestamp(timestamp, tz=None):
     if tz is None:
         tz = LOCAL_TZ
-    return datetime.datetime.fromtimestamp(
+    return dt.datetime.fromtimestamp(
         timestamp, tz=pytz.UTC).astimezone(tz)
 
 
@@ -99,8 +99,8 @@ class Alarm:
     displayed: bool
     date_timestamp: InitVar
     due_timestamp: InitVar
-    date: datetime.datetime = None
-    due_date: datetime.datetime = None
+    date: dt.datetime = None
+    due_date: dt.datetime = None
 
     def __post_init__(self, date_timestamp, due_timestamp):
         self.date = _from_utc_timestamp(date_timestamp)
@@ -244,7 +244,7 @@ class EventCollection:
         elif 'duration' in cal_obj:
             duration = cal_obj['duration'].dt
         else:
-            duration = datetime.timedelta()
+            duration = dt.timedelta()
         latest_occurence = self._last_occurences.get(cal_obj['uid'], start_dt)
         if occurence is None:
             occurence = latest_occurence
@@ -290,7 +290,7 @@ class EventCollection:
             self.db.remove_event(uid)
 
     def get_due_alarms(self, date):
-        end_date = date + datetime.timedelta(minutes=1)
+        end_date = date + dt.timedelta(minutes=1)
         alarms = self.db.get_alarms(date, end_date)
 
         max_alarms = {}
@@ -354,7 +354,7 @@ class CalendarStore:
 
 async def check_events(calendar_store):
     while True:
-        now = datetime.datetime.now(LOCAL_TZ).replace(second=0, microsecond=0)
+        now = dt.datetime.now(LOCAL_TZ).replace(second=0, microsecond=0)
         due_alarms = calendar_store.events.get_due_alarms(now)
         for alarm in due_alarms:
             if alarm.displayed:

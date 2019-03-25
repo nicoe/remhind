@@ -285,11 +285,10 @@ class EventCollection:
             self.db.add_last_occurence(cal_obj['uid'], occurence)
             latest_occurence = occurence
         else:
-            if 'dtstart' in cal_obj:
-                dtstart = _date2datetime(cal_obj['dtstart'].dt)
-            elif 'due' in cal_obj:
-                dtstart = _date2datetime(cal_obj['due'].dt)
-            rules = rrule(DAILY, dtstart=dtstart)
+            # Skip VTODO without start date or due date
+            if not start_dt:
+                return
+            rules = rrule(DAILY, dtstart=start_dt)
             for occurence in rules.xafter(latest_occurence, 10, inc=True):
                 _add_occurence(occurence)
             self.db.add_last_occurence(cal_obj['uid'], occurence)

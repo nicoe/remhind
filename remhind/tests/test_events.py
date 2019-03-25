@@ -111,6 +111,16 @@ RRULE:FREQ=DAILY
 END:VTODO
 """
 
+VTODO_NO_DATE = """
+BEGIN:VTODO
+UID:20190310
+DTSTAMP:20190310T150000Z
+SUMMARY:Income Tax Preparation
+PRIORITY:1
+STATUS:NEEDS-ACTION
+END:VTODO
+"""
+
 RRULE_EVENT = """
 BEGIN:VEVENT
 SUMMARY:Training
@@ -415,3 +425,14 @@ class TestEventCollection(unittest.TestCase):
             with self.subTest(start):
                 alarms = collection.get_due_alarms(start)
                 self.assertEqual(len(alarms), 0)
+
+    def test_todo_no_start(self):
+        event = icalendar.Todo.from_ical(VTODO_NO_DATE)
+        collection = EventCollection()
+        collection.add(event, None)
+
+        start = dt.datetime(2019, 3, 10, 0, 0)
+        end = dt.datetime(9999, 12, 31, 0, 0)
+        alarms = collection.db.get_alarms(start, end)
+
+        self.assertEqual(len(alarms), 0)

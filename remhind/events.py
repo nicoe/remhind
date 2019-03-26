@@ -306,7 +306,8 @@ class EventCollection:
 
         alarms = []
         for alarm in db_alarms:
-            ical = get_component_from_ics(alarm.event, alarms2ics[alarm.event])
+            ical = get_component_from_ics(
+                alarm.event, pathlib.Path(alarms2ics[alarm.event]).read_text())
             if (isinstance(ical, icalendar.Todo)
                     and ical.get('status', 'NEEDS-ACTION') not in {
                         'NEEDS-ACTION', 'IN-PROCESS'}):

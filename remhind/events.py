@@ -398,10 +398,7 @@ class CalendarStore:
     def _get_components_from_ics(self, ics):
         cal = icalendar.Calendar.from_ical(ics.read_text())
         for component in cal.subcomponents:
-            if isinstance(component, icalendar.Event):
-                yield (ics, component)
-            elif isinstance(component, icalendar.Todo) and (
-                    component.get('status', 'NEEDS-ACTION') == 'NEEDS-ACTION'):
+            if isinstance(component, (icalendar.Event, icalendar.Todo)):
                 yield (ics, component)
 
     def add_file(self, ics):

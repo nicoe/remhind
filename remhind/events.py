@@ -5,6 +5,7 @@ import logging
 import pathlib
 import sqlite3
 from dataclasses import dataclass, InitVar
+from typing import Optional
 
 import gi
 import icalendar
@@ -98,8 +99,8 @@ class Alarm:
     message: str
     date_timestamp: InitVar
     due_timestamp: InitVar
-    date: dt.datetime = None
-    due_date: dt.datetime = None
+    date: Optional[dt.datetime] = None
+    due_date: Optional[dt.datetime] = None
 
     def __post_init__(self, date_timestamp, due_timestamp):
         self.date = _from_utc_timestamp(date_timestamp)

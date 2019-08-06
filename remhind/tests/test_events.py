@@ -5,6 +5,7 @@ from unittest.mock import patch
 import icalendar
 import pytz
 from tzlocal import get_localzone
+from freezegun import freeze_time
 
 import remhind.events
 from ..events import EventCollection, parse_rule, get_component_from_ics
@@ -115,6 +116,17 @@ VTODO_NO_DATE = """
 BEGIN:VTODO
 UID:20190310
 DTSTAMP:20190310T150000Z
+SUMMARY:Income Tax Preparation
+PRIORITY:1
+STATUS:NEEDS-ACTION
+END:VTODO
+"""
+
+VTODO_LONG_OVERDUE = """
+BEGIN:VTODO
+UID:20190310
+DTSTAMP:20190310T150000Z
+DUE;TZID=Europe/Brussels:20100310T170000
 SUMMARY:Income Tax Preparation
 PRIORITY:1
 STATUS:NEEDS-ACTION
@@ -276,6 +288,7 @@ class TestEventCollection(unittest.TestCase):
             dt.datetime(2019, 3, 10, 11, 0, tzinfo=pytz.UTC))
         self.assertEqual(alarms[1].message, "Breakfast Meeting")
 
+    @freeze_time('20190207', tz_offset=0)
     def test_rrule_event(self):
         event = icalendar.Event.from_ical(RRULE_EVENT)
         collection = EventCollection()
@@ -368,6 +381,7 @@ class TestEventCollection(unittest.TestCase):
 
     @patch('remhind.events.get_component_from_ics')
     @patch('pathlib.Path.read_text')
+    @freeze_time('20190310', tz_offset=0)
     def test_due_alarms_reccuring(self, path_mock, component_mock):
         event = icalendar.Event.from_ical(VEVENT_RRULE)
         component_mock.return_value = event
@@ -382,20 +396,24 @@ class TestEventCollection(unittest.TestCase):
 
     @patch('remhind.events.get_component_from_ics')
     @patch('pathlib.Path.read_text')
+    @freeze_time('20190310', tz_offset=0)
     def test_due_todo_with_rrule(self, path_mock, component_mock):
         event = icalendar.Event.from_ical(VTODO_RRULE)
         component_mock.return_value = event
         collection = EventCollection()
         collection.add(event, None)
 
-        for day in range(10, 15):
+        for idx, day in enumerate(range(10, 15)):
             start = dt.datetime(2019, 3, day, 17, 0, tzinfo=pytz.UTC)
             with self.subTest(start):
                 alarms = collection.get_due_alarms(start)
-                self.assertEqual(len(alarms), 1)
+                self.assertEqual(len(alarms), idx + 1)
 
-        component_mock.return_value = icalendar.Todo.from_ical(
+        # Simulate completion and the monitoring of the file
+        completed_event = icalendar.Todo.from_ical(
             VTODO_RRULE.replace('NEEDS-ACTION', 'COMPLETED'))
+        component_mock.return_value = completed_event
+        collection.add(completed_event, None)
 
         for day in range(15, 31):
             start = dt.datetime(2019, 3, day, 17, 0, tzinfo=pytz.UTC)
@@ -417,8 +435,11 @@ class TestEventCollection(unittest.TestCase):
                 alarms = collection.get_due_alarms(start)
                 self.assertEqual(len(alarms), 1)
 
-        component_mock.return_value = icalendar.Todo.from_ical(
+        # Simulate completion and the monitoring of the file
+        completed_event = icalendar.Todo.from_ical(
             VTODO.replace('NEEDS-ACTION', 'COMPLETED'))
+        component_mock.return_value = completed_event
+        collection.add(completed_event, None)
 
         for day in range(15, 31):
             start = dt.datetime(2019, 3, day, 17, 0, tzinfo=pytz.UTC)
@@ -435,4 +456,29 @@ class TestEventCollection(unittest.TestCase):
         end = dt.datetime(9999, 12, 31, 0, 0)
         alarms = collection.db.get_alarms(start, end)
 
+        self.assertEqual(len(alarms), 0)
+
+    @patch('remhind.events.get_component_from_ics')
+    @patch('pathlib.Path.read_text')
+    @freeze_time('20190310', tz_offset=0)
+    def test_long_overdue_todo(self, path_mock, component_mock):
+        event = icalendar.Todo.from_ical(VTODO_LONG_OVERDUE)
+        component_mock.return_value = event
+        collection = EventCollection()
+        collection.add(event, None)
+
+        noon = dt.datetime.now(tz=pytz.UTC).replace(hour=12)
+        alarms = collection.get_due_alarms(noon)
+        self.assertEqual(len(alarms), 0)
+
+        tea_time = dt.datetime.now(pytz.UTC).replace(hour=16)
+        alarms = collection.get_due_alarms(tea_time)
+        self.assertEqual(len(alarms), 1)
+
+        completed_event = icalendar.Todo.from_ical(
+            VTODO_LONG_OVERDUE.replace('NEEDS-ACTION', 'COMPLETED'))
+        component_mock.return_value = completed_event
+        collection.add(completed_event, None)
+
+        alarms = collection.get_due_alarms(tea_time)
         self.assertEqual(len(alarms), 0)

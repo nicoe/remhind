@@ -9,7 +9,7 @@ from dataclasses import dataclass, InitVar
 import gi
 import icalendar
 import pytz
-from dateutil.rrule import rruleset, rrulestr, rrule, DAILY
+from dateutil.rrule import rruleset, rrulestr
 from tzlocal import get_localzone
 
 gi.require_version('Notify', '0.7')
@@ -125,7 +125,9 @@ class SQLiteDB:
                 date INTEGER NOT NULL,
                 due_date INTEGER NOT NULL,
                 message TEXT NOT NULL,
-                displayed INTEGER)""")
+                displayed INTEGER DEFAULT 0,
+                vtodo INTEGER DEFAULT 0,
+                done INTEGER DEFAULT 0)""")
         self._conn.execute("""
             CREATE TABLE occurences (
                 event TEXT PRIMARY KEY,
@@ -143,7 +145,7 @@ class SQLiteDB:
         self._conn.execute("DELETE FROM events WHERE event = ?", (uid,))
         self._conn.commit()
 
-    def add_alarm(self, event_uid, date, due_date, message):
+    def add_alarm(self, event_uid, date, due_date, message, is_todo):
         date = _to_utc_timestamp(date)
         due_date = _to_utc_timestamp(due_date)
         cursor = self._conn.cursor()
@@ -154,20 +156,26 @@ class SQLiteDB:
         if not cursor.fetchone():
             cursor.execute("""
                 INSERT INTO alarms
-                    (event, date, due_date, message, displayed)
-                VALUES (?, ?, ?, ?, 0)""",
-                (event_uid, date, due_date, message))
+                    (event, date, due_date, message, vtodo, displayed)
+                VALUES (?, ?, ?, ?, ?, 0)""",
+                (event_uid, date, due_date, message, int(is_todo)))
             self._conn.commit()
 
     def get_alarms(self, start_date, end_date):
-        start_date = _to_utc_timestamp(start_date)
-        end_date = _to_utc_timestamp(end_date)
+        if start_date > end_date:
+            start_date, end_date = end_date, start_date
+        event_alarms = self.get_event_alarms(
+            _to_utc_timestamp(start_date), _to_utc_timestamp(end_date))
+        todo_alarms = self.get_due_todos(start_date, end_date)
+        return event_alarms + todo_alarms
+
+    def get_event_alarms(self, start, end):
         cursor = self._conn.cursor()
         cursor.execute("""
             SELECT id, event, message, displayed, date, due_date
             FROM alarms
-            WHERE (date >= ?) AND (date < ?)
-            """, (start_date, end_date))
+            WHERE (date >= ?) AND (date < ?) AND (vtodo = 0)
+            """, (start, end))
         alarms = [Alarm(*r) for r in cursor.fetchall()]
         if alarms:
             cursor.execute(
@@ -176,6 +184,38 @@ class SQLiteDB:
                 [a.id for a in alarms])
             self._conn.commit()
         return alarms
+
+    def get_due_todos(self, start, end):
+        start = start.astimezone(pytz.UTC)
+        end = end.astimezone(pytz.UTC)
+        start_time = (start.hour, start.minute)
+        end_time = (end.hour, end.minute)
+
+        def match_time(alarm):
+            date = alarm.due_date.astimezone(pytz.UTC)
+            if start_time < end_time:
+                return start_time <= (date.hour, date.minute) < end_time
+            elif start_time == end_time:
+                return start != end
+            else:
+                return (start_time <= (date.hour, date.minute)
+                    or (date.hour, date.minute) < end_time)
+
+        cursor = self._conn.cursor()
+        cursor.execute("""
+            SELECT id, event, message, displayed, date, due_date
+            FROM alarms
+            WHERE (date < ?) AND (vtodo = 1) AND (done = 0)
+            """, (_to_utc_timestamp(end),))
+        return list(filter(match_time, (Alarm(*r) for r in cursor.fetchall())))
+
+    def set_done(self, event_id, status):
+        cursor = self._conn.cursor()
+        if status.upper() in {'COMPLETED', 'CANCELLED'}:
+            cursor.execute(
+                "UPDATE alarms SET done=1 WHERE event=?",
+                (event_id,))
+        self._conn.commit()
 
     def add_last_occurence(self, event_uid, date):
         self._conn.execute("""
@@ -225,6 +265,13 @@ class EventCollection:
     def add(self, cal_obj, ics, occurence=None):
         logging.debug(f"Adding event '{cal_obj['uid']}'"
             f" from {ics} starting at {occurence}")
+
+        if (isinstance(cal_obj, icalendar.Todo)
+                and (cal_obj.get('status', '').upper() in {
+                        'COMPLETED', 'CANCELLED'})):
+            self.db.set_done(cal_obj['uid'], cal_obj['status'])
+            return
+
         if (occurence is not None
                 and occurence < self._last_occurences[cal_obj['uid']]):
             return
@@ -250,6 +297,7 @@ class EventCollection:
             occurence = latest_occurence
 
         def _add_occurence(dt):
+            is_todo = isinstance(cal_obj, icalendar.Todo)
             for component in cal_obj.subcomponents:
                 if not isinstance(component, icalendar.Alarm):
                     continue
@@ -266,30 +314,24 @@ class EventCollection:
 
                 message = component.get('description', summary)
                 if message:
-                    self.db.add_alarm(cal_obj['uid'], alarm_dt, dt, message)
+                    self.db.add_alarm(
+                        cal_obj['uid'], alarm_dt, dt, message, is_todo)
 
             if summary:
-                self.db.add_alarm(cal_obj['uid'], dt, dt, summary)
+                self.db.add_alarm(cal_obj['uid'], dt, dt, summary, is_todo)
 
-        ics_has_rule = ('rrule' in cal_obj or 'exrule' in cal_obj
+        has_rules = ('rrule' in cal_obj or 'exrule' in cal_obj
             or 'rdate' in cal_obj or 'exdate' in cal_obj)
-        has_rules = ics_has_rule or isinstance(cal_obj, icalendar.Todo)
         if not has_rules:
             if start_dt:
                 _add_occurence(start_dt)
                 self.db.add_last_occurence(cal_obj['uid'], start_dt)
-        elif ics_has_rule:
-            rules = parse_rule(cal_obj)
-            for occurence in rules.xafter(latest_occurence, 10, inc=True):
-                _add_occurence(occurence)
-            self.db.add_last_occurence(cal_obj['uid'], occurence)
-            latest_occurence = occurence
         else:
-            # Skip VTODO without start date or due date
-            if not start_dt:
-                return
-            rules = rrule(DAILY, dtstart=start_dt)
-            for occurence in rules.xafter(latest_occurence, 10, inc=True):
+            now = dt.datetime.now(tz=LOCAL_TZ).replace(second=0, microsecond=0)
+            if latest_occurence:
+                now = max(now, latest_occurence)
+            rules = parse_rule(cal_obj)
+            for occurence in rules.xafter(now, 10, inc=True):
                 _add_occurence(occurence)
             self.db.add_last_occurence(cal_obj['uid'], occurence)
             latest_occurence = occurence
@@ -304,18 +346,8 @@ class EventCollection:
         db_alarms = self.db.get_alarms(date, end_date)
         alarms2ics = self.db.get_ics_files({a.event for a in db_alarms})
 
-        alarms = []
-        for alarm in db_alarms:
-            ical = get_component_from_ics(
-                alarm.event, pathlib.Path(alarms2ics[alarm.event]).read_text())
-            if (isinstance(ical, icalendar.Todo)
-                    and ical.get('status', 'NEEDS-ACTION') not in {
-                        'NEEDS-ACTION', 'IN-PROCESS'}):
-                continue
-            alarms.append(alarm)
-
         max_alarms = {}
-        for alarm in alarms:
+        for alarm in db_alarms:
             if alarm.event in max_alarms:
                 max_alarms[alarm.event] = max(
                     max_alarms[alarm.event], alarm.due_date)
@@ -330,7 +362,7 @@ class EventCollection:
                 event_uid, pathlib.Path(ics).read_text())
             self.add(event, ics, max_alarms[event_uid])
 
-        return alarms
+        return db_alarms
 
 
 class CalendarStore:

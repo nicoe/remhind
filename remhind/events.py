@@ -96,7 +96,6 @@ class Alarm:
     id: int
     event: str
     message: str
-    displayed: bool
     date_timestamp: InitVar
     due_timestamp: InitVar
     date: dt.datetime = None
@@ -125,7 +124,6 @@ class SQLiteDB:
                 date INTEGER NOT NULL,
                 due_date INTEGER NOT NULL,
                 message TEXT NOT NULL,
-                displayed INTEGER DEFAULT 0,
                 vtodo INTEGER DEFAULT 0,
                 done INTEGER DEFAULT 0,
                 sequence INTEGER DEFAULT 0)""")
@@ -157,9 +155,8 @@ class SQLiteDB:
         if not cursor.fetchone():
             cursor.execute("""
                 INSERT INTO alarms
-                    (event, date, due_date, message, vtodo, sequence,
-                     displayed)
-                VALUES (?, ?, ?, ?, ?, ?, 0)""",
+                    (event, date, due_date, message, vtodo, sequence)
+                VALUES (?, ?, ?, ?, ?, ?)""",
                 (event_uid, date, due_date, message, int(is_todo), sequence))
             self._conn.commit()
 
@@ -174,18 +171,11 @@ class SQLiteDB:
     def get_event_alarms(self, start, end):
         cursor = self._conn.cursor()
         cursor.execute("""
-            SELECT id, event, message, displayed, date, due_date
+            SELECT id, event, message, date, due_date
             FROM alarms
             WHERE (date >= ?) AND (date < ?) AND (vtodo = 0)
             """, (start, end))
-        alarms = [Alarm(*r) for r in cursor.fetchall()]
-        if alarms:
-            cursor.execute(
-                "UPDATE alarms SET displayed=1 WHERE id in (%s)"
-                % ','.join('?' * len(alarms)),
-                [a.id for a in alarms])
-            self._conn.commit()
-        return alarms
+        return [Alarm(*r) for r in cursor.fetchall()]
 
     def get_due_todos(self, start, end):
         start = start.astimezone(pytz.UTC)
@@ -205,7 +195,7 @@ class SQLiteDB:
 
         cursor = self._conn.cursor()
         cursor.execute("""
-            SELECT id, event, message, displayed, date, due_date
+            SELECT id, event, message, date, due_date
             FROM alarms
             WHERE (date < ?) AND (vtodo = 1) AND (done = 0)
             """, (_to_utc_timestamp(end),))
@@ -417,15 +407,17 @@ class CalendarStore:
 
 
 async def check_events(calendar_store):
+    last_check = None
     while True:
         now = dt.datetime.now(LOCAL_TZ).replace(second=0, microsecond=0)
-        due_alarms = calendar_store.events.get_due_alarms(now)
-        for alarm in due_alarms:
-            if alarm.displayed:
-                continue
-            logging.debug(f'Notifying of alarm {alarm.id} "{alarm.message}"')
-            n = Notify.Notification.new(
-                "{a.due_date:%H:%M} {a.message}".format(a=alarm), "Alarm")
-            n.show()
+        if last_check is None or (last_check != now):
+            last_check = now
+            due_alarms = calendar_store.events.get_due_alarms(now)
+            for alarm in due_alarms:
+                logging.debug(
+                    f'Notifying of alarm {alarm.id} "{alarm.message}"')
+                n = Notify.Notification.new(
+                    "{a.due_date:%H:%M} {a.message}".format(a=alarm), "Alarm")
+                n.show()
         # Take some security to ensure we don't miss any minute
         await asyncio.sleep(45)

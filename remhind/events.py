@@ -334,16 +334,16 @@ class EventCollection:
 
         has_rules = ('rrule' in cal_obj or 'exrule' in cal_obj
             or 'rdate' in cal_obj or 'exdate' in cal_obj)
+        sequence = cal_obj.get('sequence', 0)
         if not has_rules:
             if start_dt:
-                _add_occurence(start_dt)
+                _add_occurence(start_dt, sequence)
                 self.db.add_last_occurence(cal_obj['uid'], start_dt)
         else:
             now = dt.datetime.now(tz=LOCAL_TZ).replace(second=0, microsecond=0)
             if latest_occurence:
                 now = max(now, latest_occurence)
             rules = parse_rule(cal_obj)
-            sequence = cal_obj.get('sequence', 0)
             for idx, occurence in enumerate(rules.xafter(now, 10, inc=True)):
                 _add_occurence(occurence, sequence + idx)
             self.db.add_last_occurence(cal_obj['uid'], occurence)

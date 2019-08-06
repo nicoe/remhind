@@ -127,7 +127,8 @@ class SQLiteDB:
                 message TEXT NOT NULL,
                 displayed INTEGER DEFAULT 0,
                 vtodo INTEGER DEFAULT 0,
-                done INTEGER DEFAULT 0)""")
+                done INTEGER DEFAULT 0,
+                sequence INTEGER DEFAULT 0)""")
         self._conn.execute("""
             CREATE TABLE occurences (
                 event TEXT PRIMARY KEY,
@@ -145,7 +146,7 @@ class SQLiteDB:
         self._conn.execute("DELETE FROM events WHERE event = ?", (uid,))
         self._conn.commit()
 
-    def add_alarm(self, event_uid, date, due_date, message, is_todo):
+    def add_alarm(self, event_uid, date, due_date, message, is_todo, sequence):
         date = _to_utc_timestamp(date)
         due_date = _to_utc_timestamp(due_date)
         cursor = self._conn.cursor()
@@ -156,9 +157,10 @@ class SQLiteDB:
         if not cursor.fetchone():
             cursor.execute("""
                 INSERT INTO alarms
-                    (event, date, due_date, message, vtodo, displayed)
-                VALUES (?, ?, ?, ?, ?, 0)""",
-                (event_uid, date, due_date, message, int(is_todo)))
+                    (event, date, due_date, message, vtodo, sequence,
+                     displayed)
+                VALUES (?, ?, ?, ?, ?, ?, 0)""",
+                (event_uid, date, due_date, message, int(is_todo), sequence))
             self._conn.commit()
 
     def get_alarms(self, start_date, end_date):
@@ -207,14 +209,19 @@ class SQLiteDB:
             FROM alarms
             WHERE (date < ?) AND (vtodo = 1) AND (done = 0)
             """, (_to_utc_timestamp(end),))
-        return list(filter(match_time, (Alarm(*r) for r in cursor.fetchall())))
+        todos = list(Alarm(*r) for r in cursor.fetchall())
+        return list(filter(match_time, todos))
 
-    def set_done(self, event_id, status):
+    def set_done(self, event_id, status, sequence):
         cursor = self._conn.cursor()
         if status.upper() in {'COMPLETED', 'CANCELLED'}:
             cursor.execute(
                 "UPDATE alarms SET done=1 WHERE event=?",
                 (event_id,))
+        else:
+            cursor.execute(
+                "UPDATE alarms SET done=1 WHERE event=? AND sequence<=?",
+                (event_id, sequence))
         self._conn.commit()
 
     def add_last_occurence(self, event_uid, date):
@@ -268,8 +275,11 @@ class EventCollection:
 
         if (isinstance(cal_obj, icalendar.Todo)
                 and (cal_obj.get('status', '').upper() in {
-                        'COMPLETED', 'CANCELLED'})):
-            self.db.set_done(cal_obj['uid'], cal_obj['status'])
+                        'COMPLETED', 'CANCELLED'}
+                    or int(cal_obj.get('sequence', 0)) > 0)):
+            self.db.set_done(
+                cal_obj['uid'], cal_obj['status'],
+                int(cal_obj.get('sequence', -1)))
             return
 
         if (occurence is not None
@@ -296,7 +306,7 @@ class EventCollection:
         if occurence is None:
             occurence = latest_occurence
 
-        def _add_occurence(dt):
+        def _add_occurence(dt, sequence):
             is_todo = isinstance(cal_obj, icalendar.Todo)
             for component in cal_obj.subcomponents:
                 if not isinstance(component, icalendar.Alarm):
@@ -315,10 +325,12 @@ class EventCollection:
                 message = component.get('description', summary)
                 if message:
                     self.db.add_alarm(
-                        cal_obj['uid'], alarm_dt, dt, message, is_todo)
+                        cal_obj['uid'], alarm_dt, dt, message, is_todo,
+                        sequence)
 
             if summary:
-                self.db.add_alarm(cal_obj['uid'], dt, dt, summary, is_todo)
+                self.db.add_alarm(
+                    cal_obj['uid'], dt, dt, summary, is_todo, sequence)
 
         has_rules = ('rrule' in cal_obj or 'exrule' in cal_obj
             or 'rdate' in cal_obj or 'exdate' in cal_obj)
@@ -331,8 +343,9 @@ class EventCollection:
             if latest_occurence:
                 now = max(now, latest_occurence)
             rules = parse_rule(cal_obj)
-            for occurence in rules.xafter(now, 10, inc=True):
-                _add_occurence(occurence)
+            sequence = cal_obj.get('sequence', 0)
+            for idx, occurence in enumerate(rules.xafter(now, 10, inc=True)):
+                _add_occurence(occurence, sequence + idx)
             self.db.add_last_occurence(cal_obj['uid'], occurence)
             latest_occurence = occurence
         self._last_occurences[cal_obj['uid']] = latest_occurence

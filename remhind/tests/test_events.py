@@ -134,6 +134,19 @@ STATUS:NEEDS-ACTION
 END:VTODO
 """
 
+VTODO_STARTING_SEQUENCE = """
+BEGIN:VTODO
+UID:20190310
+DTSTAMP:20190310T150000Z
+DUE:20100310T170000Z
+SUMMARY:Income Tax Preparation
+PRIORITY:1
+SEQUENCE:2
+STATUS:NEEDS-ACTION
+RRULE:FREQ=DAILY
+END:VTODO
+"""
+
 RRULE_EVENT = """
 BEGIN:VEVENT
 SUMMARY:Training
@@ -513,3 +526,33 @@ class TestEventCollection(unittest.TestCase):
             with self.subTest(start):
                 alarms = collection.get_due_alarms(start)
                 self.assertEqual(len(alarms), idx + 1)
+
+    @patch('remhind.events.get_component_from_ics')
+    @patch('pathlib.Path.read_text')
+    @freeze_time('20190310', tz_offset=0)
+    def test_due_todo_with_sequence(self, path_mock, component_mock):
+        event = icalendar.Event.from_ical(VTODO_STARTING_SEQUENCE)
+        component_mock.return_value = event
+        collection = EventCollection()
+        collection.add(event, None)
+
+        for idx, day in enumerate(range(10, 15)):
+            start = dt.datetime(2019, 3, day, 17, 0, tzinfo=pytz.UTC)
+            with self.subTest(start):
+                alarms = collection.get_due_alarms(start)
+                self.assertEqual(len(alarms), idx + 1)
+
+        completed_event = icalendar.Todo.from_ical(
+            VTODO_STARTING_SEQUENCE.replace('SEQUENCE:2', 'SEQUENCE:4'))
+        component_mock.return_value = completed_event
+        collection.add(completed_event, None)
+
+        nbr_alarms = idx + 1 - 2
+        alarms = collection.get_due_alarms(start)
+        self.assertEqual(len(alarms), nbr_alarms)
+
+        for idx, day in enumerate(range(15, 20)):
+            start = dt.datetime(2019, 3, day, 17, 0, tzinfo=pytz.UTC)
+            with self.subTest(start):
+                alarms = collection.get_due_alarms(start)
+                self.assertEqual(len(alarms), nbr_alarms + idx + 1)

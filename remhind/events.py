@@ -266,19 +266,20 @@ class EventCollection:
         logging.debug(f"Adding event '{cal_obj['uid']}'"
             f" from {ics} starting at {occurence}")
 
-        if (isinstance(cal_obj, icalendar.Todo)
-                and (cal_obj.get('status', '').upper() in {
-                        'COMPLETED', 'CANCELLED'}
-                    or int(cal_obj.get('sequence', 0)) > 0)):
-            self.db.set_done(
-                cal_obj['uid'], cal_obj['status'],
-                int(cal_obj.get('sequence', -1)))
-            return
+        obj_sequence = int(cal_obj.get('sequence', 0))
+        if isinstance(cal_obj, icalendar.Todo):
+            if cal_obj.get('status', '').upper() in {'COMPLETED', 'CANCELLED'}:
+                self.db.set_done(
+                    cal_obj['uid'], cal_obj['status'], obj_sequence)
+                return
+            elif obj_sequence > 0:
+                self.db.set_done(
+                    cal_obj['uid'], cal_obj['status'], obj_sequence)
 
         if (occurence is not None
                 and occurence < self._last_occurences[cal_obj['uid']]):
             return
-        obj_sequence = cal_obj.get('sequence', 0)
+        obj_sequence = int(cal_obj.get('sequence', 0))
         self.db.add_event(cal_obj['uid'], obj_sequence, ics)
 
         summary = cal_obj.get('summary', '')

@@ -203,8 +203,7 @@ class SQLiteDB:
             FROM alarms
             WHERE (date < ?) AND (vtodo = 1) AND (done = 0)
             """, (_to_utc_timestamp(end),))
-        todos = list(Alarm(*r) for r in cursor.fetchall())
-        return list(filter(match_time, todos))
+        return list(filter(match_time, (Alarm(*r) for r in cursor.fetchall())))
 
     def set_done(self, event_id, status, sequence):
         cursor = self._conn.cursor()

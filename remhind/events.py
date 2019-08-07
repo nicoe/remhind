@@ -213,7 +213,7 @@ class SQLiteDB:
                 (event_id,))
         else:
             cursor.execute(
-                "UPDATE alarms SET done=1 WHERE event=? AND sequence<=?",
+                "UPDATE alarms SET done=1 WHERE event=? AND sequence<?",
                 (event_id, sequence))
         self._conn.commit()
 

@@ -501,7 +501,7 @@ class TestEventCollection(unittest.TestCase):
                 self.assertEqual(len(alarms), idx + 1)
 
         completed_event = icalendar.Todo.from_ical(
-            VTODO_RRULE.replace('SEQUENCE:0', 'SEQUENCE:4'))
+            VTODO_RRULE.replace('SEQUENCE:0', 'SEQUENCE:5'))
         component_mock.return_value = completed_event
         collection.add(completed_event, None)
 

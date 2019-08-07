@@ -167,6 +167,9 @@ class SQLiteDB:
         event_alarms = self.get_event_alarms(
             _to_utc_timestamp(start_date), _to_utc_timestamp(end_date))
         todo_alarms = self.get_due_todos(start_date, end_date)
+        logging.debug(
+            f'Found {len(event_alarms)} events and {len(todo_alarms)}'
+            ' todos to display')
         return event_alarms + todo_alarms
 
     def get_event_alarms(self, start, end):

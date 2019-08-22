@@ -27,6 +27,8 @@ def _date2datetime(date):
         # It should be 00:00 UTC per the RFC
         date = LOCAL_TZ.localize(
             dt.datetime.combine(date, dt.time(12, 0)))
+    elif isinstance(date, dt.datetime) and date.tzinfo is None:
+        date = LOCAL_TZ.localize(date)
     return date
 
 
